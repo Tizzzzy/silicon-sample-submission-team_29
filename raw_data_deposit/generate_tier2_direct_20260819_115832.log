@@ -1,0 +1,26 @@
+2026-08-19 11:58:32,698 | INFO     | main:811 | ================================================================================
+2026-08-19 11:58:32,698 | INFO     | main:812 | SILICON SAMPLE BENCHMARK: TIER-2 DIRECT GROUP-LEVEL GENERATION
+2026-08-19 11:58:32,698 | INFO     | main:813 | ================================================================================
+2026-08-19 11:58:32,698 | INFO     | main:814 | Questionnaire: /gpfs/projects/p32143/silicon-sample-submission/survey/questionnaire.txt
+2026-08-19 11:58:32,698 | INFO     | main:815 | Model: /projects/p32143/cache/qwen36_27b
+2026-08-19 11:58:32,698 | INFO     | main:816 | Temperature: 0.0 (deterministic for group-level)
+2026-08-19 11:58:32,699 | INFO     | main:817 | Team ID: team_29, Entry: secondary-1, Version: 1
+2026-08-19 11:58:32,699 | INFO     | main:820 | Loading intervention texts...
+2026-08-19 11:58:32,715 | INFO     | main:822 |   Loaded 17 conditions
+2026-08-19 11:58:32,715 | INFO     | main:839 |   17 main cells + 459 moderator cells = 476 total
+2026-08-19 11:58:32,715 | INFO     | main:843 | DRY RUN: Printing example prompts (Consensus, single items)...
+2026-08-19 11:58:32,715 | INFO     | main:854 | 
+================================================================================
+2026-08-19 11:58:32,715 | INFO     | main:855 | EXAMPLE 1: Main cell (Consensus, trust_competence_1)
+2026-08-19 11:58:32,715 | INFO     | main:856 | ================================================================================
+2026-08-19 11:58:32,715 | INFO     | main:862 | 
+================================================================================
+2026-08-19 11:58:32,715 | INFO     | main:863 | EXAMPLE 2: Moderator cell (Consensus, party=Democrat, newsletter_signup)
+2026-08-19 11:58:32,715 | INFO     | main:864 | ================================================================================
+2026-08-19 11:58:32,715 | INFO     | main:867 | 
+================================================================================
+2026-08-19 11:58:32,715 | INFO     | main:868 | Dry run complete. Total: 44 items per cell
+2026-08-19 11:58:32,715 | INFO     | main:869 |   Main cells: 17 × 44 = 748 prompts
+2026-08-19 11:58:32,715 | INFO     | main:870 |   Moderator cells: 459 × 44 = 20196 prompts
+2026-08-19 11:58:32,715 | INFO     | main:871 |   Total: 20944 prompts
+2026-08-19 11:58:32,715 | INFO     | main:872 | No GPU/LLM calls made.

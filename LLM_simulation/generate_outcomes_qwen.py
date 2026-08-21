@@ -51,7 +51,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
-from vllm import LLM, SamplingParams
+
+from questionnaire_parser import parse_intervention_texts
 
 
 # ============================================================================
@@ -156,7 +157,7 @@ def setup_logging(log_file: Optional[str] = None) -> logging.Logger:
     return logger
 
 
-def format_with_chat_template(llm: LLM, content: list, enable_thinking: bool = False) -> str:
+def format_with_chat_template(llm: "LLM", content: list, enable_thinking: bool = False) -> str:
     """Format prompt using the Qwen chat template."""
     tokenizer = llm.get_tokenizer()
     messages = [{"role": "user", "content": content}]
@@ -501,35 +502,12 @@ def load_intervention_texts(questionnaire_path: str) -> Dict[str, str]:
     Returns:
         Dict mapping condition names to full stimulus texts
     """
-    # For this implementation, we provide minimal placeholder texts.
-    # In a real scenario, you'd extract these from the survey questionnaire
-    # or store them in a structured format.
-
-    # These are abbreviated; you should provide the full texts from
-    # survey/questionnaire.txt for production use.
-    interventions = {
-        "control": "Control condition: You will read about a neutral topic.",
-        "Corporate reliance": (
-            "Climate scientists develop models that forecast climate-related risks. "
-            "Insurance companies rely on climate scientists' projections when calculating premiums. "
-            "Insurers carefully evaluate data and only rely on sources they consider reliable. "
-            "Other large corporations also integrate climate projections into their long-term planning."
-        ),
-        "Social justice": (
-            "In the United States, the wealthiest 10% are responsible for roughly 40% of emissions. "
-            "The climate crisis is a fight to hold the wealthiest 10% accountable. "
-            "Climate scientists provide facts about the causes of climate change. "
-            "By staying united with climate scientists, we can win the fight for truth and justice."
-        ),
-        # ... (abbreviated; full texts from questionnaire.txt should be used)
-    }
-
-    # If the file exists, try to parse it
-    if os.path.exists(questionnaire_path):
-        logging.info(f"Reading intervention texts from {questionnaire_path}")
-        # This would require parsing the file to extract intervention blocks
-        # For now, we'll use placeholder texts; production code should extract the full texts
-
+    interventions = parse_intervention_texts(questionnaire_path)
+    if len(interventions) < 17:
+        logging.warning(
+            f"Expected 17 conditions from questionnaire_parser, got {len(interventions)}; "
+            "profiles for missing conditions will fall back to the placeholder stimulus text."
+        )
     return interventions
 
 
@@ -603,6 +581,12 @@ def main():
         default=None,
         help="Limit processing to first N profiles (for testing)",
     )
+    parser.add_argument(
+        "--questionnaire_path",
+        type=str,
+        default=str(Path(__file__).resolve().parent.parent / "survey" / "questionnaire.txt"),
+        help="Path to survey/questionnaire.txt (for intervention stimulus text parsing)",
+    )
 
     args = parser.parse_args()
 
@@ -632,10 +616,10 @@ def main():
     logger.info(f"Loaded {len(df_profiles)} profiles")
 
     # Load intervention texts
-    questionnaire_path = "survey/questionnaire.txt"
-    interventions_dict = load_intervention_texts(questionnaire_path)
+    interventions_dict = load_intervention_texts(args.questionnaire_path)
 
-    # Initialize vLLM
+    # Initialize vLLM (import here to avoid dependency issues when module is imported elsewhere)
+    from vllm import LLM, SamplingParams
     logger.info("Initializing vLLM engine (this may take a few moments)...")
     llm = LLM(
         model=args.model_path,
