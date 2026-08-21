@@ -11,10 +11,17 @@ The pool is an INTERMEDIATE ARTIFACT — it contains only the demographic and
 condition assignment columns. The 13 outcome variables and 12 trust sub-item
 columns must be simulated separately (via LLM calls per profile + intervention).
 
-Total profiles:
-  - control: 1,000
-  - each intervention (×16): 500
-  - total: 9,000 (Tier-1 minimum precision floor per benchmark preregistration)
+Total profiles (defaults):
+  - control: 4,000
+  - each intervention (×16): 2,000
+  - total: 36,000
+
+The benchmark's Tier-1 floor is 1,000 control + 500 per intervention = 9,000.
+We run 4x the floor. The floor is the size of the human sample we are scored
+against, so our own sampling noise cannot be removed entirely -- the human
+half's noise stays fixed. But it can be shrunk: at the floor our noise and the
+human noise are equal, and 4x cuts the combined noise on each effect estimate
+by about 21% (ceiling is 29% at infinite N). See CHANGELOG.md.
 
 Demographic distributions:
   - age_band, race: exact Census quotas from preregistration (load-bearing)
@@ -27,7 +34,7 @@ from the repo root).
 
 Example usage:
   python scripts/generate_profiles.py --seed 2026 --out synthetic_profiles/profiles_pool.csv
-  python scripts/generate_profiles.py --seed 42 --n-control 2000 --n-intervention 1000  # 18,000 total
+  python scripts/generate_profiles.py --seed 42 --n-control 1000 --n-intervention 500  # benchmark floor
 """
 
 import argparse
@@ -111,18 +118,53 @@ MODERATOR_PROBS = {
 }
 
 
-def generate_pool(seed, n_control=1000, n_intervention=500):
+# ---------------------------------------------------------------------------
+# Home state — needed ONLY by the "Extreme weather predictions" arm, which is
+# state-adaptive: each respondent sees an intro naming their state plus one of
+# four hazard case texts, chosen by that state's risk category.
+# See LLM_simulation/stimuli.py.
+#
+# DECISION (flagged in CHANGELOG.md): states are drawn in proportion to resident
+# population, so the case mix matches what a US sample would produce. The
+# alternative (uniform over states) would over-weight small states and shift the
+# flood/wildfire/winter mix. Figures are Census resident population in millions,
+# used as a stand-in for adult population.
+STATE_POPULATION_M = {
+    "California": 39.0, "Texas": 30.0, "Florida": 22.6, "New York": 19.6,
+    "Pennsylvania": 13.0, "Illinois": 12.6, "Ohio": 11.8, "Georgia": 11.0,
+    "North Carolina": 10.8, "Michigan": 10.0, "New Jersey": 9.3, "Virginia": 8.7,
+    "Washington": 7.8, "Arizona": 7.4, "Tennessee": 7.1, "Massachusetts": 7.0,
+    "Indiana": 6.9, "Missouri": 6.2, "Maryland": 6.2, "Wisconsin": 5.9,
+    "Colorado": 5.9, "Minnesota": 5.7, "South Carolina": 5.4, "Alabama": 5.1,
+    "Louisiana": 4.6, "Kentucky": 4.5, "Oregon": 4.2, "Oklahoma": 4.1,
+    "Connecticut": 3.6, "Utah": 3.4, "Iowa": 3.2, "Nevada": 3.2,
+    "Arkansas": 3.1, "Mississippi": 2.9, "Kansas": 2.9, "New Mexico": 2.1,
+    "Nebraska": 2.0, "Idaho": 1.9, "West Virginia": 1.8, "Hawaii": 1.4,
+    "New Hampshire": 1.4, "Maine": 1.4, "Montana": 1.1, "Rhode Island": 1.1,
+    "Delaware": 1.0, "South Dakota": 0.9, "North Dakota": 0.8, "Alaska": 0.73,
+    "Washington, D.C.": 0.67, "Vermont": 0.65, "Wyoming": 0.58,
+}
+
+
+def _state_probs():
+    """State draw probabilities, normalised from resident population."""
+    total = sum(STATE_POPULATION_M.values())
+    return [v / total for v in STATE_POPULATION_M.values()]
+
+
+def generate_pool(seed, n_control=4000, n_intervention=2000):
     """
     Generate demographic profile pool.
 
     Args:
         seed (int): Random seed for reproducibility
-        n_control (int): Number of profiles in control condition (default 1,000)
-        n_intervention (int): Number of profiles per intervention (default 500)
+        n_control (int): Number of profiles in control condition (default 4,000)
+        n_intervention (int): Number of profiles per intervention (default 2,000)
 
     Returns:
         pd.DataFrame: Synthetic profile pool with columns:
-            profile_id, condition, gender, age_band, race, education, income, party
+            profile_id, condition, gender, age_band, race, education, income,
+            party, state
     """
     rng = np.random.default_rng(seed)
     rows = []
@@ -155,6 +197,14 @@ def generate_pool(seed, n_control=1000, n_intervention=500):
             "party": rng.choice(
                 MODERATOR_LEVELS["party"], size=n, p=MODERATOR_PROBS["party"]
             ),
+            # Carried for every profile even though only the state-adaptive
+            # "Extreme weather predictions" arm reads it, so that arm's
+            # respondents are drawn from the same pool as everyone else.
+            "state": rng.choice(
+                list(STATE_POPULATION_M),
+                size=n,
+                p=_state_probs(),
+            ),
         }
 
         # Assign profile_id sequentially
@@ -174,17 +224,21 @@ def generate_pool(seed, n_control=1000, n_intervention=500):
                 "education": samples["education"][i],
                 "income": samples["income"][i],
                 "party": samples["party"][i],
+                "state": samples["state"][i],
             })
 
     df = pd.DataFrame(rows)
 
     # Reorder columns to match submission_spec.R tier1_required[0:8]
-    df = df[["profile_id", "condition", "gender", "age_band", "race", "education", "income", "party"]]
+    # First 8 columns match submission_spec.R tier1_required[0:8]; `state` is an
+    # extra working column and is dropped before the submission file is written.
+    df = df[["profile_id", "condition", "gender", "age_band", "race",
+             "education", "income", "party", "state"]]
 
     return df
 
 
-def validate_pool(df):
+def validate_pool(df, n_control=1000, n_intervention=500):
     """
     Validate profile pool structure and contents.
 
@@ -197,15 +251,18 @@ def validate_pool(df):
     errors = []
 
     # Total row count
-    if len(df) != 9000:
-        errors.append(f"Expected 9,000 rows, got {len(df)}")
+    expected_total = n_control + n_intervention * (len(CONDITIONS) - 1)
+    if len(df) != expected_total:
+        errors.append(f"Expected {expected_total:,} rows, got {len(df):,}")
 
     # No missing values
     if df.isnull().any().any():
         errors.append(f"Found {df.isnull().sum().sum()} missing values")
 
     # Condition set and counts
-    expected_counts = {c: (1000 if c == "control" else 500) for c in CONDITIONS}
+    expected_counts = {
+        c: (n_control if c == "control" else n_intervention) for c in CONDITIONS
+    }
     actual_counts = df["condition"].value_counts().to_dict()
 
     for condition in CONDITIONS:
@@ -246,7 +303,7 @@ def print_summary(df):
     print("=" * 80)
 
     # Overall distribution
-    print("\nOVERALL (across all 9,000 profiles):")
+    print(f"\nOVERALL (across all {len(df):,} profiles):")
     print("-" * 80)
     for moderator in ["gender", "age_band", "race", "education", "income", "party"]:
         print(f"\n{moderator.upper()}:")
@@ -300,14 +357,15 @@ def main():
     parser.add_argument(
         "--n-control",
         type=int,
-        default=1000,
-        help="Number of control profiles (default: 1,000)",
+        default=4000,
+        help="Number of control profiles (default: 4,000; benchmark floor is 1,000)",
     )
     parser.add_argument(
         "--n-intervention",
         type=int,
-        default=500,
-        help="Number of profiles per intervention (default: 500; 16 interventions × 500 + 1,000 control = 9,000 total)",
+        default=2000,
+        help="Number of profiles per intervention (default: 2,000; benchmark floor is 500). "
+             "16 x 2,000 + 4,000 control = 36,000 total",
     )
 
     args = parser.parse_args()
@@ -318,7 +376,7 @@ def main():
 
     # Validate
     try:
-        validate_pool(df)
+        validate_pool(df, n_control=args.n_control, n_intervention=args.n_intervention)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)

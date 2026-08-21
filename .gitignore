@@ -10,4 +10,6 @@ maintainer/
 .Rproj.user/
 .DS_Store
 
-*.zip
+# Python cache
+__pycache__/
+*.pyc
