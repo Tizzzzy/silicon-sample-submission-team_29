@@ -40,6 +40,9 @@ from typing import Dict, List
 
 import pandas as pd
 
+# Add the script's directory to sys.path so imports work when run from elsewhere
+sys.path.insert(0, str(Path(__file__).parent))
+
 from items import BY_KEY, ITEMS, load_newsletter_offer
 from prompt_qa import ItemPrompt, build_item_prompt, parse_answer
 from stimuli import parse_stimuli, render_extreme_weather, stimulus_for
