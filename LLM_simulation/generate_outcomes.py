@@ -197,11 +197,25 @@ def main() -> None:
     else:
         # Import late so --help and --dry_run work without a GPU present.
         from vllm import LLM, SamplingParams
-        try:
-            from vllm.sampling_params import GuidedDecodingParams
-        except ImportError:  # older vLLM
-            from vllm.model_executor.guided_decoding.guided_fields import (  # type: ignore
-                GuidedDecodingRequest as GuidedDecodingParams)
+
+        # Try multiple import locations for GuidedDecodingParams (vLLM version compatibility)
+        GuidedDecodingParams = None
+        for import_path in [
+            ("vllm.sampling_params", "GuidedDecodingParams"),
+            ("vllm", "GuidedDecodingParams"),
+            ("vllm.model_executor.guided_decoding.guided_fields", "GuidedDecodingRequest"),
+        ]:
+            try:
+                module_name, class_name = import_path
+                module = __import__(module_name, fromlist=[class_name])
+                GuidedDecodingParams = getattr(module, class_name)
+                break
+            except (ImportError, AttributeError):
+                continue
+
+        if GuidedDecodingParams is None:
+            print("⚠️  GuidedDecodingParams not found in vLLM; guided decoding disabled. "
+                  "Answers will be parsed via regex but not constrained during generation.")
         llm = LLM(
             model=args.model_path,
             tensor_parallel_size=args.tensor_parallel_size,
@@ -223,12 +237,15 @@ def main() -> None:
             tokenize=False, add_generation_prompt=True, enable_thinking=False)
 
     def sampling_for(prompt: ItemPrompt):
-        return SamplingParams(
-            temperature=args.temperature,
-            top_p=args.top_p,
-            max_tokens=prompt.max_tokens,
-            guided_decoding=GuidedDecodingParams(regex=prompt.regex),
-        )
+        kwargs = {
+            "temperature": args.temperature,
+            "top_p": args.top_p,
+            "max_tokens": prompt.max_tokens,
+        }
+        # Only add guided_decoding if it's available (vLLM version dependent)
+        if GuidedDecodingParams is not None:
+            kwargs["guided_decoding"] = GuidedDecodingParams(regex=prompt.regex)
+        return SamplingParams(**kwargs)
 
     rng = random.Random(args.seed)
     raw_path = output_dir / f"raw_output_{timestamp}.jsonl"
