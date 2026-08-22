@@ -143,7 +143,7 @@ def main() -> None:
     parser.add_argument("--questionnaire", default="../survey/questionnaire.txt")
     parser.add_argument("--model_path", default="/projects/p32143/cache/qwen36_27b")
     parser.add_argument("--output_dir", default="../raw_data_deposit")
-    parser.add_argument("--style", default="qa", choices=["qa", "bio", "portray"],
+    parser.add_argument("--style", default="bio", choices=["qa", "bio", "portray"],
                         help="Demographic conditioning format (ICLR paper Table 2)")
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="OPEN DECISION. This is the only source of variation "
@@ -271,7 +271,7 @@ def main() -> None:
                         "profile_id": profile["profile_id"],
                         "condition": profile["condition"],
                         "item_key": prompt.item_key,
-                        "item_text": prompt.text[:500],  # First 500 chars
+                        "item_text": prompt.text,  # First 500 chars
                     })
 
             outputs = llm.generate(
@@ -303,16 +303,17 @@ def main() -> None:
                     # Queue for retry instead of giving up immediately
                     key = (pid, prompt.item_key)
                     retry_queue[key] = (profile, prompt, attempt + 1)
-                    record["error"] = f"unparseable answer (will retry, attempt {attempt + 1})"
-                    log.info(f"{pid}/{prompt.item_key}: unparseable {text!r} → retrying")
+                    log.info(f"{pid}/{prompt.item_key}: unparseable {text!r} → retrying (attempt {attempt + 1})")
+                    # Don't write to file yet; wait for retry result
                 elif value is None:
                     # Exhausted retries, record as missing
                     n_missing += 1
-                    record["error"] = f"unparseable after {attempt} attempts"
+                    record["error"] = f"unparseable after {attempt} retries"
                     log.warning(f"{pid}/{prompt.item_key}: unparseable answer {text!r} (final)")
-
-                raw_file.write(json.dumps(record) + "\n")
-                if value is not None:
+                    raw_file.write(json.dumps(record) + "\n")
+                else:
+                    # Successfully parsed, record it
+                    raw_file.write(json.dumps(record) + "\n")
                     by_profile[pid][prompt.item_key] = value
 
             for pid, item_values in by_profile.items():
