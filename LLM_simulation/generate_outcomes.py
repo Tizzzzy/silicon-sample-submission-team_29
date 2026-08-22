@@ -249,25 +249,41 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     raw_path = output_dir / f"raw_output_{timestamp}.jsonl"
+    prompt_examples_path = output_dir / f"prompt_examples_{timestamp}.json"
     rows: List[Dict] = []
     n_missing = 0
+    prompt_examples: List[Dict] = []  # First 10 prompts for inspection
+    retry_queue: Dict[tuple, int] = {}  # {(profile_id, item_key): retry_count}
+    MAX_RETRIES = 2
 
     with open(raw_path, "w") as raw_file:
-        pending: List[tuple] = []   # (profile_dict, ItemPrompt)
+        pending: List[tuple] = []   # (profile_dict, ItemPrompt, attempt_num)
 
-        def flush() -> None:
-            nonlocal pending, n_missing
+        def flush(retry_mode: bool = False) -> None:
+            nonlocal pending, n_missing, retry_queue, prompt_examples
             if not pending:
                 return
+
+            # Log first 10 prompts for inspection
+            if not retry_mode:
+                for profile, prompt, _ in pending[:10]:
+                    prompt_examples.append({
+                        "profile_id": profile["profile_id"],
+                        "condition": profile["condition"],
+                        "item_key": prompt.item_key,
+                        "item_text": prompt.text[:500],  # First 500 chars
+                    })
+
             outputs = llm.generate(
-                [{"prompt": chat_wrap(p.text)} for _, p in pending],
-                [sampling_for(p) for _, p in pending],
+                [{"prompt": chat_wrap(p.text)} for _, p, _ in pending],
+                [sampling_for(p) for _, p, _ in pending],
             )
 
             by_profile: Dict[str, Dict[str, float]] = defaultdict(dict)
             profile_of: Dict[str, Dict] = {}
+            failed_items: List[tuple] = []  # Items to retry
 
-            for (profile, prompt), output in zip(pending, outputs):
+            for (profile, prompt, attempt), output in zip(pending, outputs):
                 pid = profile["profile_id"]
                 profile_of[pid] = profile
                 text = output.outputs[0].text if output.outputs else ""
@@ -280,13 +296,21 @@ def main() -> None:
                     "item": prompt.item_key,
                     "raw_answer": text,
                     "value": value,
+                    "attempt": attempt,
                 }
-                if value is None:
-                    # Recorded as missing, never imputed. The old pipeline wrote
-                    # 50 here, indistinguishable from a real neutral answer.
+
+                if value is None and attempt < MAX_RETRIES:
+                    # Queue for retry instead of giving up immediately
+                    key = (pid, prompt.item_key)
+                    retry_queue[key] = (profile, prompt, attempt + 1)
+                    record["error"] = f"unparseable answer (will retry, attempt {attempt + 1})"
+                    log.info(f"{pid}/{prompt.item_key}: unparseable {text!r} → retrying")
+                elif value is None:
+                    # Exhausted retries, record as missing
                     n_missing += 1
-                    record["error"] = "unparseable answer"
-                    log.warning(f"{pid}/{prompt.item_key}: unparseable answer {text!r}")
+                    record["error"] = f"unparseable after {attempt} attempts"
+                    log.warning(f"{pid}/{prompt.item_key}: unparseable answer {text!r} (final)")
+
                 raw_file.write(json.dumps(record) + "\n")
                 if value is not None:
                     by_profile[pid][prompt.item_key] = value
@@ -299,17 +323,35 @@ def main() -> None:
 
             pending = []
 
+        # Main pass: process all items
         for _, profile_row in profiles.iterrows():
             profile = profile_row.to_dict()
             for prompt in build_prompts_for_profile(
                     profile, stimuli, newsletter_offer, args.style, rng):
-                pending.append((profile, prompt))
+                pending.append((profile, prompt, 1))  # attempt=1
             # Flush on respondent boundaries so a profile's 44 items stay together.
             if len(pending) >= args.batch_size:
-                flush()
-        flush()
+                flush(retry_mode=False)
+        flush(retry_mode=False)
+
+        # Retry pass: reprocess any items that failed to parse
+        if retry_queue:
+            log.info(f"Retrying {len(retry_queue):,} unparseable items...")
+            for (pid, item_key), (profile, prompt, attempt) in retry_queue.items():
+                pending.append((profile, prompt, attempt))
+                if len(pending) >= args.batch_size:
+                    flush(retry_mode=True)
+            flush(retry_mode=True)
+            log.info(f"Retry pass complete")
 
     log.info(f"Raw per-item answers written to {raw_path}")
+
+    # Write example prompts for inspection
+    if prompt_examples:
+        with open(prompt_examples_path, "w") as f:
+            json.dump(prompt_examples, f, indent=2)
+        log.info(f"First {len(prompt_examples)} prompt examples written to {prompt_examples_path}")
+
     if n_missing:
         log.warning(f"{n_missing:,} item calls produced no usable answer "
                     f"({100 * n_missing / (len(profiles) * len(ITEMS)):.3f}% of calls)")
