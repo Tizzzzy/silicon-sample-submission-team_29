@@ -248,7 +248,8 @@ def main() -> None:
         return SamplingParams(**kwargs)
 
     rng = random.Random(args.seed)
-    raw_path = output_dir / f"raw_output_{timestamp}.jsonl"
+    # Use fixed filenames for checkpoint/resume functionality
+    raw_path = output_dir / "raw_output.jsonl"
     prompt_examples_path = output_dir / f"prompt_examples_{timestamp}.json"
     rows: List[Dict] = []
     n_missing = 0
@@ -268,7 +269,7 @@ def main() -> None:
             with open(raw_path, "r") as f:
                 for line in f:
                     record = json.loads(line)
-                    pid = record["profile_id"]
+                    pid = str(record["profile_id"])  # Ensure string type for consistency
                     item_key = record["item"]
                     processed_items.add((pid, item_key))
                     if record["value"] is not None:
@@ -310,7 +311,7 @@ def main() -> None:
             failed_items: List[tuple] = []  # Items to retry
 
             for (profile, prompt, attempt), output in zip(pending, outputs):
-                pid = profile["profile_id"]
+                pid = str(profile["profile_id"])  # Ensure string for consistent checkpoint format
                 profile_of[pid] = profile
                 text = output.outputs[0].text if output.outputs else ""
                 item = BY_KEY[prompt.item_key]
@@ -354,7 +355,7 @@ def main() -> None:
         n_skipped = 0
         for _, profile_row in profiles.iterrows():
             profile = profile_row.to_dict()
-            pid = profile["profile_id"]
+            pid = str(profile["profile_id"])  # Convert to string for consistent type in checkpoint
             for prompt in build_prompts_for_profile(
                     profile, stimuli, newsletter_offer, args.style, rng):
                 # Skip if already processed (for resume functionality)
