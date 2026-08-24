@@ -254,9 +254,35 @@ def main() -> None:
     n_missing = 0
     prompt_examples: List[Dict] = []  # First 10 prompts for inspection
     retry_queue: Dict[tuple, int] = {}  # {(profile_id, item_key): retry_count}
-    MAX_RETRIES = 2
+    MAX_RETRIES = 3
 
-    with open(raw_path, "w") as raw_file:
+    # Load existing results for resume functionality
+    processed_items: set = set()  # {(profile_id, item_key)}
+    existing_results: Dict[str, Dict[str, float]] = defaultdict(dict)  # {profile_id: {item_key: value}}
+    resume_mode = False
+
+    if raw_path.exists():
+        log.info(f"Found existing {raw_path}, resuming from checkpoint...")
+        resume_mode = True
+        try:
+            with open(raw_path, "r") as f:
+                for line in f:
+                    record = json.loads(line)
+                    pid = record["profile_id"]
+                    item_key = record["item"]
+                    processed_items.add((pid, item_key))
+                    if record["value"] is not None:
+                        existing_results[pid][item_key] = record["value"]
+                    if record.get("value") is None:
+                        n_missing += 1
+            log.info(f"Loaded {len(processed_items):,} processed items from checkpoint")
+        except Exception as e:
+            log.warning(f"Failed to load checkpoint: {e}. Starting fresh.")
+            processed_items.clear()
+            existing_results.clear()
+            resume_mode = False
+
+    with open(raw_path, "a" if resume_mode else "w") as raw_file:
         pending: List[tuple] = []   # (profile_dict, ItemPrompt, attempt_num)
 
         def flush(retry_mode: bool = False) -> None:
@@ -266,7 +292,7 @@ def main() -> None:
 
             # Log first 10 prompts for inspection
             if not retry_mode:
-                for profile, prompt, _ in pending[:10]:
+                for profile, prompt, _ in pending[:]:
                     prompt_examples.append({
                         "profile_id": profile["profile_id"],
                         "condition": profile["condition"],
@@ -324,16 +350,25 @@ def main() -> None:
 
             pending = []
 
-        # Main pass: process all items
+        # Main pass: process all items (skip already-processed items if resuming)
+        n_skipped = 0
         for _, profile_row in profiles.iterrows():
             profile = profile_row.to_dict()
+            pid = profile["profile_id"]
             for prompt in build_prompts_for_profile(
                     profile, stimuli, newsletter_offer, args.style, rng):
+                # Skip if already processed (for resume functionality)
+                if (pid, prompt.item_key) in processed_items:
+                    n_skipped += 1
+                    continue
                 pending.append((profile, prompt, 1))  # attempt=1
             # Flush on respondent boundaries so a profile's 44 items stay together.
             if len(pending) >= args.batch_size:
                 flush(retry_mode=False)
         flush(retry_mode=False)
+
+        if resume_mode and n_skipped:
+            log.info(f"Skipped {n_skipped:,} already-processed items")
 
         # Retry pass: reprocess any items that failed to parse
         if retry_queue:
@@ -356,6 +391,18 @@ def main() -> None:
     if n_missing:
         log.warning(f"{n_missing:,} item calls produced no usable answer "
                     f"({100 * n_missing / (len(profiles) * len(ITEMS)):.3f}% of calls)")
+
+    # If resuming, rebuild rows from all available results (existing + newly generated)
+    if resume_mode and existing_results:
+        log.info(f"Rebuilding rows from {len(existing_results):,} profiles with results...")
+        rows = []
+        profiles_by_id = {str(row["profile_id"]): row for _, row in profiles.iterrows()}
+        for pid in existing_results:
+            if pid in profiles_by_id:
+                profile = profiles_by_id[pid]
+                row = {c: profile[c] for c in SUBMISSION_COLUMNS[:8]}
+                row.update(composites(existing_results[pid]))
+                rows.append(row)
 
     df = pd.DataFrame(rows)
     missing_cols = [c for c in SUBMISSION_COLUMNS if c not in df.columns]
