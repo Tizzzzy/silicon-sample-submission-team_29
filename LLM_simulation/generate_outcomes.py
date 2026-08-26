@@ -259,12 +259,12 @@ def main() -> None:
     MAX_RETRIES = 5  # Increased from 3 to handle high failure rate
 
     # Load existing results for resume functionality
-    processed_items: set = set()  # {(profile_id, item_key)}
+    processed_items: set = set()  # {(profile_id, item_key)} — successfully parsed items ONLY
     existing_results: Dict[str, Dict[str, float]] = defaultdict(dict)  # {profile_id: {item_key: value}}
     resume_mode = False
+    failed_items_to_retry: set = set()  # {(profile_id, item_key)} — items that need re-processing
 
     if raw_path.exists():
-        print("------------HERE!---------------")
         log.info(f"Found existing {raw_path}, resuming from checkpoint...")
         resume_mode = True
         try:
@@ -273,17 +273,23 @@ def main() -> None:
                     record = json.loads(line)
                     pid = str(record["profile_id"])  # Ensure string type for consistency
                     item_key = record["item"]
-                    processed_items.add((pid, item_key))
+
                     if record["value"] is not None:
+                        # Successfully parsed: skip on resume
+                        processed_items.add((pid, item_key))
                         existing_results[pid][item_key] = record["value"]
-                    if record.get("value") is None:
+                    else:
+                        # Failed to parse: re-queue for retry
+                        failed_items_to_retry.add((pid, item_key))
                         n_missing += 1
-            print("------------HERE!---------------")
-            log.info(f"Loaded {len(processed_items):,} processed items from checkpoint")
+
+            log.info(f"Loaded {len(processed_items):,} successful items (will skip)")
+            log.info(f"Loaded {len(failed_items_to_retry):,} failed items (will retry)")
         except Exception as e:
             log.warning(f"Failed to load checkpoint: {e}. Starting fresh.")
             processed_items.clear()
             existing_results.clear()
+            failed_items_to_retry.clear()
             resume_mode = False
 
     with open(raw_path, "a" if resume_mode else "w") as raw_file:
@@ -376,13 +382,33 @@ def main() -> None:
 
         # Retry pass: reprocess any items that failed to parse
         if retry_queue:
-            log.info(f"Retrying {len(retry_queue):,} unparseable items...")
+            log.info(f"Retrying {len(retry_queue):,} unparseable items from this run...")
             for (pid, item_key), (profile, prompt, attempt) in retry_queue.items():
                 pending.append((profile, prompt, attempt))
                 if len(pending) >= args.batch_size:
                     flush(retry_mode=True)
             flush(retry_mode=True)
             log.info(f"Retry pass complete")
+
+        # Checkpoint retry pass: reprocess items that failed in a previous run
+        if resume_mode and failed_items_to_retry:
+            log.info(f"Retrying {len(failed_items_to_retry):,} items that failed in previous run...")
+            profiles_dict = {str(row["profile_id"]): row.to_dict() for _, row in profiles.iterrows()}
+            for pid, item_key in failed_items_to_retry:
+                if pid in profiles_dict:
+                    profile = profiles_dict[pid]
+                    # Rebuild the prompt for this item
+                    prompts = build_prompts_for_profile(
+                        profile, stimuli, newsletter_offer, args.style, rng)
+                    for prompt in prompts:
+                        if prompt.item_key == item_key:
+                            pending.append((profile, prompt, 1))  # Start fresh with attempt=1
+                            break
+                    if len(pending) >= args.batch_size:
+                        flush(retry_mode=True)
+            if pending:
+                flush(retry_mode=True)
+            log.info(f"Checkpoint retry pass complete")
 
     log.info(f"Raw per-item answers written to {raw_path}")
 
