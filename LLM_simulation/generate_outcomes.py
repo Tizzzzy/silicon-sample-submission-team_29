@@ -223,6 +223,7 @@ def main() -> None:
             enable_prefix_caching=True,  # the 44 items of a respondent share a prefix
             trust_remote_code=True,
             disable_log_stats=True,
+            enforce_eager=True,  # Try for stability if getting high parse failure rate
             seed=args.seed,
         )
     tokenizer = llm.get_tokenizer()
@@ -255,7 +256,7 @@ def main() -> None:
     n_missing = 0
     prompt_examples: List[Dict] = []  # First 10 prompts for inspection
     retry_queue: Dict[tuple, int] = {}  # {(profile_id, item_key): retry_count}
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5  # Increased from 3 to handle high failure rate
 
     # Load existing results for resume functionality
     processed_items: set = set()  # {(profile_id, item_key)}
@@ -263,6 +264,7 @@ def main() -> None:
     resume_mode = False
 
     if raw_path.exists():
+        print("------------HERE!---------------")
         log.info(f"Found existing {raw_path}, resuming from checkpoint...")
         resume_mode = True
         try:
@@ -276,6 +278,7 @@ def main() -> None:
                         existing_results[pid][item_key] = record["value"]
                     if record.get("value") is None:
                         n_missing += 1
+            print("------------HERE!---------------")
             log.info(f"Loaded {len(processed_items):,} processed items from checkpoint")
         except Exception as e:
             log.warning(f"Failed to load checkpoint: {e}. Starting fresh.")
@@ -291,9 +294,9 @@ def main() -> None:
             if not pending:
                 return
 
-            # Log first 10 prompts for inspection
+            # Log last 10 prompts for inspection
             if not retry_mode:
-                for profile, prompt, _ in pending[:]:
+                for profile, prompt, _ in pending[-10:]:
                     prompt_examples.append({
                         "profile_id": profile["profile_id"],
                         "condition": profile["condition"],
