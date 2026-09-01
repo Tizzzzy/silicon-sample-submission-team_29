@@ -13,3 +13,13 @@ maintainer/
 # Python cache
 __pycache__/
 *.pyc
+
+# Large intermediate data files (not needed in repo, can be regenerated)
+representations.dat
+*.memmap
+completed_rows.jsonl
+completed_rows_shard*.jsonl
+*.npz
+raw_output*.jsonl
+*.log
+check_output.log

@@ -1,31 +1,40 @@
 {
-  "team_id": "example",
-  "team_name": "Example Team (replace me)",
-  "contact": "name@institution.edu",
+  "team_id": "29",
+  "team_name": "Dong_Jessica",
+  "contact": "dongshu2024@u.northwestern.edu, jhullman@northwestern.edu",
   "creators": [
     {
-      "name": "Lastname, Firstname",
-      "affiliation": "Your institution",
-      "orcid": ""
+      "name": "Shu, Dong",
+      "affiliation": "Northwestern University",
+      "orcid": "https://orcid.org/0009-0009-9785-3934"
+    },
+    {
+      "name": "Hullman, Jessica",
+      "affiliation": "Northwestern University",
+      "orcid": "https://orcid.org/0000-0001-6826-3550"
     }
   ],
   "abstract": "",
   "license": "CC-BY-4.0",
-  "tier": 1,
+  "tier": 2,
   "entry": "primary",
-  "approach_family": "per-respondent simulation, single model",
+  "approach_family": "probing",
   "models": [
-    "gpt-4o-mini-2024-07-18"
+    "Qwen 3.6 27B"
   ],
-  "code_repository": "https://github.com/your-team/your-repo",
+  "code_repository": "https://github.com/Tizzzzy/silicon-sample-submission-team_29.git",
   "code_doi": null,
   "disclosure_class": "A",
   "escrow_doi": null,
   "zenodo_doi": null,
   "prediction_files": [
     {
-      "file": "predictions/example_T1_primary_v1.csv",
-      "sha256": "0f24e117fcf6803743a12ab43f42bf8b0a7893fb9a706e5303cae3eadb79cc59"
+      "file": "team_29_T2_primary_v1_cells_main.csv",
+      "sha256": "28995040a644acf456a6b45cbaf340471f908f80774f2afc7d5f350c80916df8"
+    },
+    {
+      "file": "team_29_T2_primary_v1_cells_moderator.csv",
+      "sha256": "8d1ef819602a85625352b063016024e67d022cf0839aed99161d19ad217bf885"
     }
   ],
   "coverage": {

@@ -1,0 +1,136 @@
+================================================================================
+SILICON SAMPLE BENCHMARK — TIER 2 SUBMISSION STATUS
+================================================================================
+Date: 2026-09-01
+Team: Dong Shu & Jessica Hullman, Northwestern University
+Entry: primary
+
+================================================================================
+✅ COMPLETED STEPS
+================================================================================
+
+1. ✅ Generated Predictions
+   - Main cells: 221 rows (17 conditions × 13 outcomes)
+   - Moderator cells: 5,967 rows (17 × 27 × 13)
+   - Data: Qwen 3.6 27B LLM with constrained decoding
+   - File: /predictions/team_29_T2_primary_v1_cells_*.csv
+
+2. ✅ Validated Submission
+   - All schema checks passed
+   - No NaN, duplicates, or coverage gaps
+   - SHA-256 fingerprints verified
+   - File: validate_submission.py
+
+3. ✅ Completed Registration
+   - metadata.json (with fingerprints, team info, disclosure)
+   - registration.md (GUIDE-LLM form, fully signed)
+   - File: /predictions/, registration.md
+
+4. ✅ Generated Zenodo Metadata
+   - .zenodo.json (auto-generated from metadata.json)
+   - Contains: title, creators, keywords, license, communities
+   - File: .zenodo.json
+
+================================================================================
+📋 NEXT STEPS TO SUBMIT
+================================================================================
+
+**Step 1: Commit to GitHub**
+  git add -A
+  git commit -m "Final submission: Tier 2 probings predictions"
+  git push origin main
+
+**Step 2: Connect to Zenodo** (if not already done)
+  - Go to https://zenodo.org → Log in with GitHub
+  - Settings → GitHub → Enable "silicon-sample-submission-team_29"
+
+**Step 3: Create GitHub Release**
+  - Go to https://github.com/Tizzzzy/silicon-sample-submission-team_29/releases
+  - Click "Create a new release"
+  - Tag: v1
+  - Title: "Silicon Sample Benchmark — Team 29 / Tier 2 / Primary Submission"
+  - Description: (see SUBMISSION_INSTRUCTIONS.md for template)
+  - Click "Publish release"
+
+**Step 4: Wait for Zenodo Archive**
+  - Zenodo auto-archives (usually within 5-10 minutes)
+  - You'll receive an email with the DOI
+  - DOI format: https://zenodo.org/records/XXXXXXX
+
+**Step 5: Email Submission to Organizers**
+  - To: janlukas.pfaender@gmail.com
+  - Include: DOI + SHA-256 fingerprints (from metadata.json)
+  - See SUBMISSION_INSTRUCTIONS.md for email template
+
+================================================================================
+📊 SUBMISSION DETAILS
+================================================================================
+
+Team ID: 29
+Team Name: Dong_Jessica
+Tier: 2 (cell-level predictions)
+Entry: primary
+Approach Family: probing
+Model: Qwen 3.6 27B
+Disclosure Class: A (Open)
+
+Main predictions: 221 cells
+  - 17 conditions (control + 16 interventions)
+  - 13 outcomes (trust_multidimensional, policy support, etc.)
+  - Range: 0.35 to 53.51
+
+Moderator predictions: 5,967 cells
+  - 17 × 27 × 13 = 5,967 cells
+  - Breakdowns by demographics (gender, age, race, education, income, party)
+
+Fingerprints (SHA-256):
+  main:      28995040a644acf456a6b45cbaf340471f908f80774f2afc7d5f350c80916df8
+  moderator: 8d1ef819602a85625352b063016024e67d022cf0839aed99161d19ad217bf885
+
+================================================================================
+📁 KEY FILES
+================================================================================
+
+Predictions:
+  - predictions/team_29_T2_primary_v1_cells_main.csv
+  - predictions/team_29_T2_primary_v1_cells_moderator.csv
+
+Metadata & Registration:
+  - metadata.json
+  - registration.md
+  - .zenodo.json
+
+Validation & Submission:
+  - validate_submission.py (Python validator, no R dependencies)
+  - generate_zenodo_json.py (generates .zenodo.json)
+  - SUBMISSION_INSTRUCTIONS.md (step-by-step guide)
+
+Code & Documentation:
+  - probing/probe_testing/extract_representation/ (representation extraction)
+  - probing/probe_training/ (probe training: PCA + Ridge)
+  - probing/probe_testing/predict/ (cell-level predictions)
+
+================================================================================
+⏰ DEADLINE
+================================================================================
+
+Prediction lock: August 31, 2026
+Deposit window: August 28–31, 2026 (within last 4 days)
+
+Status: ✅ READY TO SUBMIT
+
+You are within the deposit window and have completed all technical validation.
+Proceed with GitHub release → Zenodo auto-archive → Email DOI to organizers.
+
+================================================================================
+💾 VALIDATION RESULTS
+================================================================================
+
+Metadata check:     ✅ PASS
+Registration check: ✅ PASS
+Main file check:    ✅ PASS (221 rows, no NaN, no duplicates)
+Moderator file check: ✅ PASS (5,967 rows, no NaN, no duplicates)
+
+Overall: ✅ VALIDATION PASSED — READY FOR SUBMISSION
+
+================================================================================
