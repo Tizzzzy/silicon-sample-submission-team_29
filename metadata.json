@@ -29,11 +29,11 @@
   "zenodo_doi": null,
   "prediction_files": [
     {
-      "file": "team_29_T2_primary_v1_cells_main.csv",
+      "file": "predictions/29_T2_primary_v1_cells_main.csv",
       "sha256": "28995040a644acf456a6b45cbaf340471f908f80774f2afc7d5f350c80916df8"
     },
     {
-      "file": "team_29_T2_primary_v1_cells_moderator.csv",
+      "file": "predictions/29_T2_primary_v1_cells_moderator.csv",
       "sha256": "8d1ef819602a85625352b063016024e67d022cf0839aed99161d19ad217bf885"
     }
   ],
